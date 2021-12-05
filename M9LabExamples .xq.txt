@@ -1,0 +1,238 @@
+#XPath Expressions
+#-----------------
+
+db:open("companyDB", "companyDB.xml")
+//@supervisor
+
+db:open("companyDB", "companyDB.xml")
+/companyDB/employees/employee/@supervisor
+
+db:open("companyDB", "companyDB.xml")
+/companyDB/employees/employee/lname/../@supervisor
+
+db:open("companyDB", "companyDB.xml")
+/companyDB/employees/employee/./@supervisor
+
+#Find the address AND the gender of all employees
+db:open("companyDB", "companyDB.xml")
+/companyDB/employees/employee/(address/text() | sex/text())
+
+#Find all the employees' information except for their gender
+db:open("companyDB", "companyDB.xml")
+/companyDB/employees/employee/(*/text() except sex/text())
+
+
+#Find only the birth month of all employees
+db:open("companyDB", "companyDB.xml")
+/companyDB/employees/employee/substring(dob,4,3)    
+
+
+#Find the relationship of the each employee's dependents if exists;
+#otherwise display the employee's last name.
+db:open("companyDB", "companyDB.xml")
+/companyDB/employees/employee/
+(
+ if (dependents) 
+ then dependents/dependent/relationship/text()
+ else lname/text()
+)
+
+
+#Find the the last name of the employees who have daughters.
+db:open("companyDB", "companyDB.xml")
+/companyDB/employees
+/employee[dependents/dependent/relationship = "Daughter"]
+/lname/text()
+
+
+
+#Find the salary of the employees who work on at least one project.
+db:open("companyDB", "companyDB.xml")
+/companyDB/employees/employee
+/projects[worksOn]/../salary/text()
+
+
+#Find the dependent names of the first three employees.
+db:open("companyDB", "companyDB.xml")
+/companyDB/employees/employee[position() < 4]
+//dependentName/text()
+
+
+#Find the name of the second dependent of the fourth employees.
+db:open("companyDB", "companyDB.xml")
+/companyDB/employees/employee[4]
+//dependent[2]/dependentName/text()
+
+
+db:open("companyDB", "companyDB.xml")
+/companyDB/employees/employee[sex = 'F'][salary > 50000]
+[substring-after(address/text(), "Sacramento")]
+
+
+
+#xQuery Expressions:
+#-------------------
+
+for $emp in db:open('companyDB')//employee 
+let $gender :=  $emp/sex 
+let $salary := $emp/salary
+where $gender = 'F' and $salary > 50000
+order by $emp
+return $emp 
+
+
+
+for $emp in db:open('companyDB')//employee 
+let $gender :=  if($emp/sex = 'M' and $emp/salary > 50000) then 
+                   "Male" 
+                else if ($emp/sex = 'F' and $emp/salary > 50000) then
+                   "Female"
+                 else
+                   "NA"  
+group by $gender
+order by $gender
+return element {$gender}{count($emp)}
+
+
+every $workhrs in doc("companyDB")/
+companyDB/projects/project/workers/worker
+satisfies($workhrs <= 50)
+
+
+let $name := doc("companyDB")//dname
+let $location := doc("companyDB")//locations/location
+for $nom in distinct-values($name), $loc in distinct-values($location)
+return <Department Name = "{$nom}" Location = "{$loc}" />
+
+
+
+for $dloc in doc("companyDB")//locations/location,
+    $ploc in doc("companyDB")//project/plocation
+return <result ProjectName="{$ploc/../pname}"
+               DeptName="{$dloc/../../dname}" />
+
+
+
+for $dloc in doc("companyDB")//locations/location,
+    $ploc in doc("companyDB")//project/plocation
+where $ploc = $dloc
+return <result ProjectName="{$ploc/../pname}"
+               DeptName="{$dloc/../../dname}" />
+
+
+for $dloc in doc("companyDB")//locations/location
+return <resut DeptName="{$dloc/../../dname}" >
+{
+  attribute ProjectName
+   {
+    for $ploc in doc("companyDB")//project/plocation
+    where $ploc = $dloc
+    return $ploc/../pname
+   }
+} </resut>
+
+for $d in doc("companyDB")//department
+let $name := $d/dname
+return element {$name}{count(tokenize($d/employees/@essns))}
+
+
+for $p in doc("companyDB")//project
+let $w := $p/workers
+return <result> 
+ProjectName {$p/pname/text()}
+TotalNumberofWorkers {count($w/worker)},
+AverageNumberofHours {round(avg($w/worker), 2)}
+ </result>
+
+
+
+for $e in doc("companyDB")//employee
+let $d := $e/dependents
+return <result> 
+EmployeeNamee {concat($e/fname, ' ', $e/minit ,' ', $e/lname/text())}
+TotalNumberofDependents {count($d/dependent)},
+TotalNumberofProjects {sum($e/projects/worksOn/@hours)}
+ </result>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Serializing and Parsing XML Documents
+#------------------------------------
+
+for $d in doc('companyDB')/companyDB/departments/department
+return( <csv>
+  <record>
+    <id>{$d/@dno/data()}</id>
+    <name>{$d/dname/data()}</name>
+    <location1>{$d/locations/location[1]/data()}</location1>
+    <location2>{$d/locations/location[2]/data()}</location2>
+    <location3>{$d/locations/location[3]/data()}</location3>
+    <location4>{$d/locations/location[4]/data()}</location4>
+  </record>
+</csv>)
+
+let $table := file:read-text('table.csv')
+return csv:parse($table, map{'header': "true", 'separator': 'tab'})
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Validating the companyDB XML database
+#-----------------------------------------
+
+
+for $doc in doc("companyDB")
+let $schema :=(
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+<xs:complexType name="companyDBType">
+  <xs:sequence>
+    <xs:element name="departments" type="xs:string"/>
+    <xs:element name="employees" type="xs:string"/>
+    <xs:element name="projects" type="xs:string"/>
+  </xs:sequence>
+</xs:complexType>
+<xs:element name="companyDB" type="companyDBType"/>
+</xs:schema>) 
+return validate:xsd-report($doc, $schema)
+
+
